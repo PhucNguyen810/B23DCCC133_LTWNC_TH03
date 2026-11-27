@@ -12,8 +12,8 @@ vi.mock('next-auth/react', () => ({
   useSession: () => sessionState,
 }));
 
-describe('Header', () => {
-  it('shows the member greeting and hides admin navigation for a member', () => {
+describe('Thanh điều hướng', () => {
+  it('hiện lời chào member và ẩn liên kết quản trị', () => {
     render(<Header />);
     expect(screen.getByRole('link', { name: 'Trang chủ' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Tin đăng' })).toHaveAttribute('href', '/posts');
@@ -23,7 +23,7 @@ describe('Header', () => {
     expect(screen.queryByRole('link', { name: 'Quản trị' })).not.toBeInTheDocument();
   });
 
-  it('shows the admin navigation only to admin', () => {
+  it('chỉ hiện liên kết quản trị cho admin', () => {
     sessionState.data = { user: { name: 'Quản trị Chợ', role: 'admin' } };
     render(<Header />);
     expect(screen.getByRole('link', { name: 'Quản trị' })).toHaveAttribute('href', '/admin');

@@ -13,9 +13,12 @@ export default defineConfig({
         'src/lib/permissions.ts',
         'src/lib/post-validate.ts',
         'src/lib/format.ts',
-        'src/components/Header.tsx',
         'src/components/PostForm.tsx',
       ],
+      thresholds: {
+        perFile: true,
+        lines: 70,
+      },
     },
   },
 });

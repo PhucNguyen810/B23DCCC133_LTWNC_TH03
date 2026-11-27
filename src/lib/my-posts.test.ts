@@ -17,22 +17,39 @@ const validInput: PostInput = {
   contact: '0912345678',
 };
 
-describe('my-posts services', () => {
-  it('lists only the owner’s posts with status and cursor pagination', () => {
-    const first = listMine('sv01@ptit.edu.vn', '', 0, 8);
-    expect(first.items).toHaveLength(8);
-    expect(first.total).toBe(27);
-    expect(first.nextCursor).toBe(8);
-
-    const pending = listMine('sv01@ptit.edu.vn', parseStatus('pending'));
-    expect(pending.total).toBe(3);
-    expect(pending.nextCursor).toBeNull();
-
-    expect(listMine('sv02@ptit.edu.vn', '', 0, 8).total).toBe(9);
-    expect(parseStatus('other')).toBe('');
+describe('my-posts', () => {
+  it('sv01 có 27 tin', () => {
+    expect(listMine('sv01@ptit.edu.vn', '').total).toBe(27);
   });
 
-  it('submits new pending posts to the front with contact details in description', () => {
+  it('trang đầu có 8 tin và nextCursor bằng 8', () => {
+    const result = listMine('sv01@ptit.edu.vn', '', 0, 8);
+    expect(result.items).toHaveLength(8);
+    expect(result.nextCursor).toBe(8);
+  });
+
+  it('trang cuối bắt đầu ở cursor 24 có 3 tin và không còn cursor tiếp', () => {
+    const result = listMine('sv01@ptit.edu.vn', '', 24, 8);
+    expect(result.items).toHaveLength(3);
+    expect(result.nextCursor).toBeNull();
+  });
+
+  it('lọc pending của sv01 còn 3 tin', () => {
+    const result = listMine('sv01@ptit.edu.vn', parseStatus('pending'));
+    expect(result.total).toBe(3);
+    expect(result.items.every((post) => post.status === 'pending')).toBe(true);
+  });
+
+  it('sv02 chỉ có 9 tin của mình', () => {
+    expect(listMine('sv02@ptit.edu.vn', '').total).toBe(9);
+  });
+
+  it('parseStatus bỏ qua giá trị không hợp lệ', () => {
+    expect(parseStatus('approved')).toBe('approved');
+    expect(parseStatus('invalid')).toBe('');
+  });
+
+  it('submitPost thêm tin pending vào đầu mảng và ghép thông tin liên hệ', () => {
     const post = submitPost('sv01@ptit.edu.vn', validInput);
     expect(db.posts[0]).toBe(post);
     expect(post.id).toBe(37);
@@ -41,7 +58,7 @@ describe('my-posts services', () => {
     expect(post.description).toContain('\nLiên hệ: Zalo 0912345678');
   });
 
-  it('returns each resolve outcome and resolves only an approved owner post', () => {
+  it('resolvePost trả đúng các kết quả và chỉ nhận lại tin approved của chủ tin', () => {
     expect(resolvePost('sv01@ptit.edu.vn', 999)).toBe('not-found');
     expect(resolvePost('sv02@ptit.edu.vn', 2)).toBe('forbidden');
     expect(resolvePost('sv02@ptit.edu.vn', 5)).toBe('not-approved');

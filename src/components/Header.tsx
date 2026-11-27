@@ -1,9 +1,20 @@
 'use client';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { signOut, useSession } from 'next-auth/react';
 
 export default function Header() {
-  const { data: session, status } = useSession();
+  const { data: session, status, update } = useSession();
+  const pathname = usePathname();
+  const previousPathname = useRef(pathname);
+
+  useEffect(() => {
+    if (previousPathname.current === pathname) return;
+    previousPathname.current = pathname;
+    void update();
+  }, [pathname, update]);
+
   return (
     <header className="topbar">
       <nav aria-label="Điều hướng chính">
