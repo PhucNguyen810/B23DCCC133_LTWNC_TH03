@@ -20,7 +20,7 @@ npm run build
 npm start
 ```
 
-## Tài khoản thực hành
+## Tài khoản thực hành demo
 
 | Vai trò | Email | Mật khẩu |
 | --- | --- | --- |

@@ -12,8 +12,10 @@ export default async function LoginPage({
   const params = await searchParams;
   const callbackUrl = typeof params.callbackUrl === 'string' ? params.callbackUrl : '/my-posts';
   return (
-    <main className="container">
+    <main className="container login-panel">
+      <p className="eyebrow">Chào mừng bạn quay lại</p>
       <h1>Đăng nhập</h1>
+      <p className="page-intro">Đăng nhập để quản lý tin đăng và kết nối với cộng đồng PTIT.</p>
       <LoginForm callbackUrl={callbackUrl} />
     </main>
   );

@@ -35,48 +35,77 @@ export default async function MyPostsPage({ searchParams }: { searchParams: Prom
   nextParams.set('limit', String(limit + 8));
 
   return (
-    <section>
-      <h1>Tin đăng của tôi</h1>
+  <section className="page-section my-posts-page">
+    <header className="page-header">
+      <div>
+        <p className="eyebrow">Bảng điều khiển cá nhân</p>
+        <h1>Tin đăng của tôi</h1>
+        <p className="page-intro">Tạo tin mới, theo dõi trạng thái và cập nhật những món đồ đã tìm thấy.</p>
+      </div>
+      <span className="count-chip">{result.total} tin trong tài khoản</span>
+    </header>
+
+    <section className="panel panel-muted">
+      <div className="panel-heading">
+        <div>
+          <h2>Đăng tin tìm đồ</h2>
+          <p>Tin mới sẽ được gửi đến quản trị viên để kiểm duyệt.</p>
+        </div>
+      </div>
       <PostForm action={createPostAction} />
+    </section>
+
+    <section className="panel">
+      <div className="panel-heading">
+        <div>
+          <h2>Danh sách tin đã đăng</h2>
+          <p>Hiển thị {result.items.length} / {result.total} tin</p>
+        </div>
+      </div>
 
       <form method="get" className="filter-form">
-        <label htmlFor="status">Trạng thái</label>
-        <select id="status" name="status" defaultValue={status}>
-          <option value="">Tất cả</option>
-          <option value="pending">Chờ duyệt</option>
-          <option value="approved">Đang hiển thị</option>
-          <option value="hidden">Đã ẩn</option>
-        </select>
-        <button type="submit">Lọc</button>
+        <div className="filter-field">
+          <label htmlFor="status">Lọc theo trạng thái</label>
+          <select id="status" name="status" defaultValue={status}>
+            <option value="">Tất cả</option>
+            <option value="pending">Chờ duyệt</option>
+            <option value="approved">Đang hiển thị</option>
+            <option value="hidden">Đã ẩn</option>
+          </select>
+        </div>
+        <button type="submit">Lọc tin</button>
       </form>
 
-      <p>Hiển thị {result.items.length} / {result.total} tin</p>
-      {result.items.length === 0 ? <p>Chưa có tin đăng phù hợp.</p> : (
-        <table>
-          <thead><tr><th>Tiêu đề</th><th>Ngày</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
-          <tbody>{result.items.map((post) => {
-            const label = post.resolved ? 'Đã nhận lại' : statusLabels[post.status];
-            const resolveAction = resolvePostAction.bind(null, post.id);
-            return (
-              <tr key={post.id}>
-                <td>{post.title}</td>
-                <td>{formatDate(post.date)}</td>
-                <td>{label}</td>
-                <td>
-                  {canResolve && post.status === 'approved' && !post.resolved && (
-                    <form action={resolveAction}>
-                      <button type="submit">Đánh dấu đã nhận lại</button>
-                    </form>
-                  )}
-                </td>
-              </tr>
-            );
-          })}</tbody>
-        </table>
+      {result.items.length === 0 ? <p className="empty-state">Chưa có tin đăng phù hợp.</p> : (
+        <div className="table-scroll">
+          <table className="data-table">
+            <thead><tr><th>Tiêu đề</th><th>Ngày</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+            <tbody>{result.items.map((post) => {
+              const label = post.resolved ? 'Đã nhận lại' : statusLabels[post.status];
+              const statusTone = post.resolved ? 'resolved' : post.status;
+              const resolveAction = resolvePostAction.bind(null, post.id);
+              return (
+                <tr key={post.id}>
+                  <td>{post.title}</td>
+                  <td>{formatDate(post.date)}</td>
+                  <td><span className={`status-badge status-${statusTone}`}>{label}</span></td>
+                  <td>
+                    {canResolve && post.status === 'approved' && !post.resolved && (
+                      <form action={resolveAction}>
+                        <button className="button button-outline button-small" type="submit">Đánh dấu đã nhận lại</button>
+                      </form>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}</tbody>
+          </table>
+        </div>
       )}
       {result.nextCursor !== null
-        ? <Link className="button" href={`/my-posts?${nextParams.toString()}`}>Xem thêm</Link>
-        : <p>Đã hiển thị hết tin</p>}
+        ? <div className="pagination-action"><Link className="button button-outline" href={`/my-posts?${nextParams.toString()}`}>Xem thêm</Link></div>
+        : <p className="page-intro">Đã hiển thị hết tin</p>}
+    </section>
     </section>
   );
 }
