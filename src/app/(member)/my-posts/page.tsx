@@ -3,15 +3,20 @@ import { redirect } from 'next/navigation';
 import Link from 'next/link';
 import { auth } from '@/auth';
 import { can } from '@/lib/permissions';
-import { getMyPosts } from '@/lib/my-posts';
-import type { PostStatus } from '@/types';
+import { listMine, parseStatus } from '@/lib/my-posts';
+import { formatDate } from '@/lib/format';
+import { createPostAction, resolvePostAction } from './actions';
 import PostForm from '@/components/PostForm';
-import ResolveButton from '@/components/ResolveButton';
+import type { PostStatus } from '@/types';
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
 const one = (value: string | string[] | undefined): string => typeof value === 'string' ? value : '';
-const statusValues: PostStatus[] = ['pending', 'approved', 'hidden'];
+const statusLabels: Record<PostStatus, string> = {
+  pending: 'Chờ duyệt',
+  approved: 'Đang hiển thị',
+  hidden: 'Đã ẩn',
+};
 
 export const metadata: Metadata = { robots: { index: false } };
 
@@ -19,45 +24,59 @@ export default async function MyPostsPage({ searchParams }: { searchParams: Prom
   const session = await auth();
   if (!session?.user.email) redirect('/login');
   const params = await searchParams;
-  const q = one(params.q);
-  const requestedStatus = one(params.status);
-  const status = statusValues.includes(requestedStatus as PostStatus) ? requestedStatus as PostStatus : 'all';
-  const requestedPage = Number(one(params.page));
-  const page = Number.isFinite(requestedPage) && requestedPage > 0 ? Math.floor(requestedPage) : 1;
-  const result = getMyPosts(session.user.email, { q, status, page });
-  const canCreate = can(session.user.role, 'post:create');
+  const status = parseStatus(one(params.status));
+  const requestedLimit = Number(one(params.limit));
+  const limit = Number.isSafeInteger(requestedLimit) && requestedLimit > 0 ? requestedLimit : 8;
+  const result = listMine(session.user.email, status, 0, limit);
   const canResolve = can(session.user.role, 'post:resolve');
+
   const nextParams = new URLSearchParams();
-  if (q) nextParams.set('q', q);
-  if (status !== 'all') nextParams.set('status', status);
-  nextParams.set('page', String(page + 1));
+  if (status) nextParams.set('status', status);
+  nextParams.set('limit', String(limit + 8));
 
   return (
     <section>
       <h1>Tin đăng của tôi</h1>
-      {canCreate && <PostForm />}
-      <h2>Danh sách</h2>
+      <PostForm action={createPostAction} />
+
       <form method="get" className="filter-form">
-        <label htmlFor="my-posts-q">Tìm theo tiêu đề</label>
-        <input id="my-posts-q" name="q" defaultValue={q} />
-        <label htmlFor="my-posts-status">Trạng thái</label>
-        <select id="my-posts-status" name="status" defaultValue={status}>
-          <option value="all">Tất cả</option>
+        <label htmlFor="status">Trạng thái</label>
+        <select id="status" name="status" defaultValue={status}>
+          <option value="">Tất cả</option>
           <option value="pending">Chờ duyệt</option>
           <option value="approved">Đang hiển thị</option>
           <option value="hidden">Đã ẩn</option>
         </select>
         <button type="submit">Lọc</button>
       </form>
-      <p>{result.total} tin phù hợp</p>
-      {result.posts.length === 0 ? <p>Chưa có tin đăng phù hợp.</p> : result.posts.map((post) => (
-        <article key={post.id}>
-          <Link href={`/posts/${post.id}`}>{post.title}</Link>
-          <span> — {post.status} — {post.resolved ? 'Đã nhận lại' : 'Chưa nhận lại'}</span>
-          {canResolve && !post.resolved && <ResolveButton id={post.id} />}
-        </article>
-      ))}
-      {result.hasMore && <Link className="button" href={`/my-posts?${nextParams.toString()}`}>Xem thêm</Link>}
+
+      <p>Hiển thị {result.items.length} / {result.total} tin</p>
+      {result.items.length === 0 ? <p>Chưa có tin đăng phù hợp.</p> : (
+        <table>
+          <thead><tr><th>Tiêu đề</th><th>Ngày</th><th>Trạng thái</th><th>Thao tác</th></tr></thead>
+          <tbody>{result.items.map((post) => {
+            const label = post.resolved ? 'Đã nhận lại' : statusLabels[post.status];
+            const resolveAction = resolvePostAction.bind(null, post.id);
+            return (
+              <tr key={post.id}>
+                <td>{post.title}</td>
+                <td>{formatDate(post.date)}</td>
+                <td>{label}</td>
+                <td>
+                  {canResolve && post.status === 'approved' && !post.resolved && (
+                    <form action={resolveAction}>
+                      <button type="submit">Đánh dấu đã nhận lại</button>
+                    </form>
+                  )}
+                </td>
+              </tr>
+            );
+          })}</tbody>
+        </table>
+      )}
+      {result.nextCursor !== null
+        ? <Link className="button" href={`/my-posts?${nextParams.toString()}`}>Xem thêm</Link>
+        : <p>Đã hiển thị hết tin</p>}
     </section>
   );
 }

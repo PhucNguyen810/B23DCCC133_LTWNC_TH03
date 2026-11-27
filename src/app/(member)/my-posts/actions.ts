@@ -1,57 +1,49 @@
 'use server';
 import { revalidatePath } from 'next/cache';
-import { redirect } from 'next/navigation';
 import { auth } from '@/auth';
 import { can } from '@/lib/permissions';
-import { createMyPost, resolveMyPost } from '@/lib/my-posts';
-import type { PostInput } from '@/lib/post-validate';
-
-export interface PostActionState {
-  message: string;
-  errors: string[];
-  success: boolean;
-}
-
-const readInput = (formData: FormData): PostInput => ({
-  title: String(formData.get('title') ?? ''),
-  kind: String(formData.get('kind') ?? ''),
-  category: String(formData.get('category') ?? ''),
-  place: String(formData.get('place') ?? ''),
-  date: String(formData.get('date') ?? ''),
-  description: String(formData.get('description') ?? ''),
-});
+import { resolvePost, submitPost } from '@/lib/my-posts';
+import { toPostInput, validatePost, type PostFormState } from '@/lib/post-validate';
 
 export async function createPostAction(
-  _previousState: PostActionState,
+  previousState: PostFormState,
   formData: FormData,
-): Promise<PostActionState> {
+): Promise<PostFormState> {
+  void previousState;
+  const input = toPostInput(formData);
+  const values = input;
   const session = await auth();
-  if (!session?.user.email) redirect('/login');
-  if (!can(session.user.role, 'post:create')) throw new Error('Không có quyền');
-  const result = createMyPost(readInput(formData), session.user.email);
-  if (!result.ok) return { message: '', errors: result.errors, success: false };
-  revalidatePath('/admin');
+  if (!can(session?.user.role, 'post:create') || !session?.user.email) {
+    return { errors: {}, values, message: 'Không có quyền' };
+  }
+
+  const errors = validatePost(input);
+  if (Object.keys(errors).length > 0) return { errors, values };
+
+  submitPost(session.user.email, input);
   revalidatePath('/my-posts');
-  revalidatePath('/');
-  return { message: 'Đã gửi tin, chờ quản trị viên duyệt.', errors: [], success: true };
+  return {
+    errors: {},
+    values: {},
+    message: 'Đã gửi tin, chờ kiểm duyệt',
+    ok: true,
+  };
 }
 
-export async function resolvePostAction(
-  id: number,
-  _previousState: PostActionState,
-  _formData: FormData,
-): Promise<PostActionState> {
-  void _previousState;
-  void _formData;
+export async function resolvePostAction(id: number, formData: FormData): Promise<void> {
+  void formData;
   const session = await auth();
-  if (!session?.user.email) redirect('/login');
-  if (!can(session.user.role, 'post:resolve')) redirect('/forbidden');
-  if (!resolveMyPost(id, session.user.email)) {
-    return { message: 'Không thể cập nhật tin này.', errors: [], success: false };
+  if (!session?.user.email || !can(session.user.role, 'post:resolve')) {
+    throw new Error('Không có quyền');
   }
+
+  const result = resolvePost(session.user.email, id);
+  if (result === 'not-found') throw new Error('Không tìm thấy tin đăng');
+  if (result === 'forbidden') throw new Error('Không có quyền');
+  if (result === 'not-approved') throw new Error('Tin đăng chưa được duyệt');
+
   revalidatePath('/my-posts');
-  revalidatePath('/');
   revalidatePath('/posts');
+  revalidatePath('/');
   revalidatePath(`/posts/${id}`);
-  return { message: 'Đã đánh dấu tin là đã nhận lại.', errors: [], success: true };
 }

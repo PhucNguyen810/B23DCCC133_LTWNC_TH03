@@ -1,20 +1,44 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
-import PostForm from './PostForm';
-
-vi.mock('@/app/(member)/my-posts/actions', () => ({
-  createPostAction: vi.fn(async () => ({ message: '', errors: [], success: false })),
-}));
+import PostForm, { type PostFormAction } from './PostForm';
+import type { PostFormState } from '@/lib/post-validate';
 
 describe('PostForm', () => {
-  it('renders labeled fields and submits through an action form', () => {
-    const { container } = render(<PostForm />);
-    expect(screen.getByLabelText('Tiêu đề')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loại tin')).toBeInTheDocument();
-    expect(screen.getByLabelText('Danh mục')).toBeInTheDocument();
-    expect(screen.getByLabelText('Địa điểm')).toBeInTheDocument();
-    expect(screen.getByLabelText('Ngày')).toBeInTheDocument();
-    expect(screen.getByLabelText('Mô tả')).toBeInTheDocument();
-    expect(container.querySelector('form')?.getAttribute('action')).toBeDefined();
+  it('renders every labeled field and provides the Zalo default', () => {
+    const action: PostFormAction = vi.fn(async () => ({ errors: {}, values: {} }));
+    render(<PostForm action={action} />);
+
+    for (const label of ['Tiêu đề', 'Loại tin', 'Danh mục', 'Địa điểm', 'Ngày', 'Mô tả', 'Loại liên hệ', 'Thông tin liên hệ']) {
+      expect(screen.getByLabelText(label)).toBeInTheDocument();
+    }
+    expect(screen.getByLabelText('Loại liên hệ')).toHaveValue('Zalo');
+  });
+
+  it('keeps entered values and displays returned field errors', async () => {
+    const returnedState: PostFormState = {
+      errors: { contact: 'Email không hợp lệ' },
+      values: {
+        title: 'Mất tai nghe',
+        kind: 'Thất lạc',
+        category: 'Khác',
+        place: 'Thư viện',
+        date: '2026-11-10',
+        description: 'Mô tả đủ dài để hợp lệ.',
+        contactType: 'Email',
+        contact: 'abc',
+      },
+    };
+    const action: PostFormAction = vi.fn(async () => returnedState);
+    const user = userEvent.setup();
+    render(<PostForm action={action} />);
+
+    await user.click(screen.getByRole('button', { name: 'Đăng tin' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Email không hợp lệ');
+    await waitFor(() => {
+      expect(screen.getByLabelText('Tiêu đề')).toHaveValue('Mất tai nghe');
+      expect(screen.getByLabelText('Loại liên hệ')).toHaveValue('Email');
+      expect(screen.getByLabelText('Thông tin liên hệ')).toHaveValue('abc');
+    });
   });
 });

@@ -1,6 +1,12 @@
 import { db } from './db';
-import { validatePost, type PostInput } from './post-validate';
+import { toValidatedPostInput, type PostInput } from './post-validate';
 import type { Post, PostStatus } from '../types';
+
+export interface MyPostsPage {
+  items: Post[];
+  nextCursor: number | null;
+  total: number;
+}
 
 export interface PostStatusCounts {
   pending: number;
@@ -8,32 +14,23 @@ export interface PostStatusCounts {
   hidden: number;
 }
 
-export interface MyPostsQuery {
-  q?: string;
-  status?: PostStatus | 'all';
-  page?: number;
-  pageSize?: number;
-}
+export const parseStatus = (value: unknown): PostStatus | '' =>
+  value === 'pending' || value === 'approved' || value === 'hidden' ? value : '';
 
-export interface MyPostsPage {
-  posts: Post[];
-  total: number;
-  page: number;
-  pageSize: number;
-  hasMore: boolean;
-}
-
-export const getMyPosts = (email: string, query: MyPostsQuery = {}): MyPostsPage => {
-  const pageSize = Math.max(1, query.pageSize ?? 10);
-  const page = Math.max(1, Math.floor(query.page ?? 1));
-  const q = query.q?.trim().toLocaleLowerCase('vi');
-  const filtered = db.posts.filter((post) =>
-    post.authorEmail === email
-    && (!q || post.title.toLocaleLowerCase('vi').includes(q))
-    && (!query.status || query.status === 'all' || post.status === query.status),
+export const listMine = (
+  email: string,
+  status: PostStatus | '',
+  cursor = 0,
+  size = 8,
+): MyPostsPage => {
+  const start = Number.isFinite(cursor) ? Math.max(0, Math.floor(cursor)) : 0;
+  const pageSize = Number.isFinite(size) ? Math.max(1, Math.floor(size)) : 8;
+  const matching = db.posts.filter((post) =>
+    post.authorEmail === email && (!status || post.status === status),
   );
-  const visible = filtered.slice(0, page * pageSize);
-  return { posts: visible, total: filtered.length, page, pageSize, hasMore: visible.length < filtered.length };
+  const items = matching.slice(start, start + pageSize);
+  const nextCursor = start + items.length < matching.length ? start + items.length : null;
+  return { items, nextCursor, total: matching.length };
 };
 
 export const getPendingPosts = (): Post[] => db.posts.filter((post) => post.status === 'pending');
@@ -44,27 +41,34 @@ export const getPostStatusCounts = (): PostStatusCounts => ({
   hidden: db.posts.filter((post) => post.status === 'hidden').length,
 });
 
-export const createMyPost = (input: PostInput, authorEmail: string):
-  | { ok: true; post: Post }
-  | { ok: false; errors: string[] } => {
-  const validation = validatePost(input);
-  if (!validation.ok) return validation;
+export const submitPost = (email: string, input: PostInput): Post => {
+  const validated = toValidatedPostInput(input);
+  if (!validated) throw new Error('Dữ liệu bài đăng chưa hợp lệ');
   const post: Post = {
     id: db.nextPostId++,
-    ...validation.value,
-    authorEmail,
+    title: validated.title,
+    kind: validated.kind,
+    category: validated.category,
+    place: validated.place,
+    date: validated.date,
+    description: `${validated.description}\nLiên hệ: ${validated.contactType} ${validated.contact.trim()}`,
+    authorEmail: email,
     status: 'pending',
     resolved: false,
   };
-  db.posts.push(post);
-  return { ok: true, post };
+  db.posts.unshift(post);
+  return post;
 };
 
-export const resolveMyPost = (id: number, email: string): boolean => {
-  const post = db.posts.find((item) => item.id === id && item.authorEmail === email);
-  if (!post || post.resolved) return false;
+export type ResolvePostResult = 'not-found' | 'forbidden' | 'not-approved' | 'ok';
+
+export const resolvePost = (email: string, id: number): ResolvePostResult => {
+  const post = db.posts.find((item) => item.id === id);
+  if (!post) return 'not-found';
+  if (post.authorEmail !== email) return 'forbidden';
+  if (post.status !== 'approved') return 'not-approved';
   post.resolved = true;
-  return true;
+  return 'ok';
 };
 
 export const updatePostReview = (id: number, status: Extract<PostStatus, 'approved' | 'hidden'>): boolean => {
